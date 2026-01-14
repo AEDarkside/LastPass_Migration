@@ -1,10 +1,11 @@
 # LastPass_Migration
-This project provides Python scripts to convert custom credential exports into a LastPass-compatible CSV format. It is designed for IT admins or users migrating credentials from other systems into LastPass.
+This project provides Python scripts to convert custom credential exports into a LastPass-compatible CSV format.
+It is specifically designed for credentials exported from Revolutions Inc’s Remote Desktop Manager and makes importing them into LastPass effortless—saving me days of manual conversion work.
 
 
 Features
 --------------------------------------------------------------------------------------------------------------------
-✅ Reads input from Credentials exports from Revolutions Inc's Remote Desktop manager.
+✅ Reads input from Credentials exports from Revolutions Inc's Remote Desktop Manager.
 ✅ Skips irrelevant rows (e.g., ConnectionType = Group/Folder).
 ✅ Excludes any entries belonging to the group "ZZ Old Customers".
 ✅ Maps fields:
