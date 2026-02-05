@@ -1,26 +1,43 @@
 import pandas as pd
-import os, re, csv
+import os, re, csv, warnings
 from pathlib import Path
 
 #-----------------CONFIGURATION-----------------#
-ROOT_DIR = r"<Place FOLDER ROOT PATH HERE>"  # Directory to scan
-MARKER_FOLDER = "<PLACE MARKER FOLDER NAME HERE>"  # Folder name that indicates where technician name is in path
+ROOT_DIR = r"<Replace with the root directory path>"  # Directory to scan
+MARKER_DIR = "\\<Replace with the targeted dolder name>\\"
+MARKER_FOLDER = "<Replace with the targeted dolder name>"
 KEYWORDS = ["pw", "pwd", "password", "password:"]
 
 pattern = re.compile(rf"(?i)\b({'|'.join(map(re.escape, KEYWORDS))})\b")
 
+warnings.filterwarnings(
+    "ignore",
+    message=".*Sparkline Group extension is not supported.*",
+    category=UserWarning
+)
+
 IGNORE_TERMS = ["LastPass"] # Add more later if needed
-IGNORE_FOLDERS = ["<PLACE FOLDER NAMES TO IGNORE HERE>"] # Add more later if needed
+IGNORE_FOLDERS = ["<Replace with dolder name that should be ignored>"] # Add more later if needed
 MAX_FILE_SIZE_MB = 20  # Maximum file size to analyze in megabytes
 EXPORT_CSV = True # Set to True to export results to CSV
 CSV_PATH = "sensitive_data_report.csv"
 
 # File extensions to analyze
 FILE_EXTENSIONS = {
-    ".txt"
+    ".xls", ".xlsx"
 }
 
+
 # -----------------Helpers-----------------#
+def scanner(path: Path):
+    if ".txt" in FILE_EXTENSIONS:
+        scan_file(path)
+    elif ".xlsx" in FILE_EXTENSIONS:
+        scan_excel_file(path)
+    else:
+        print("Feature is not available yet!")
+        return False
+
 def is_scan_target(path: Path) -> bool:
     # Check if in ignore folder
     for part in path.parts:
@@ -38,7 +55,7 @@ def get_technician_name(path: Path) -> str:
     parts = path.parts
     try:
         i = parts.index(MARKER_FOLDER)
-        customer_folder = parts[i + 1]  # e.g., "CustomerName - TN"
+        customer_folder = parts[i + 1]  # e.g., "Balaclava Glass - NM"
     except (ValueError, IndexError):
         return "Unknown"
 
@@ -48,7 +65,9 @@ def get_technician_name(path: Path) -> str:
 
     return customer_folder.split(" - ", 1)[1].strip()
 
+
 #-----------------File Scanner-----------------#
+# Function for Text file or Binary File only #
 def scan_file(path: Path):
     try:
         size_bytes = path.stat().st_size
@@ -78,6 +97,37 @@ def scan_file(path: Path):
         print(f"Error accessing folder {path: Path}: {e}")
         return False
 
+# Function for Excel Sheet #
+def scan_excel_file(path_obj: Path):
+    try:
+        hits = []
+        path = str(path_obj)
+        excel_file = pd.ExcelFile(path)
+        
+        for sheet in excel_file.sheet_names:
+            df = pd.read_excel(excel_file, sheet_name=sheet, dtype=str).fillna("") # force to read as strings
+
+            for row_idx, row in df.iterrows():
+                for column_idx, val in enumerate(row.tolist()):
+                    snippet = str(val)
+                
+                if any(word in snippet.lower() for word in KEYWORDS):    
+                    hits.append({
+                        "file": str(path),
+                        "sheet": sheet,
+                        "row": int(row_idx) + 1,
+                        "col": int(column_idx) + 1,
+                        "snippet": snippet[:300]  # clip long content
+                    })
+
+        return hits
+    except (PermissionError, OSError):
+        return
+    except Exception as e:
+        print(f"Error accessing folder {path}: {e}")
+        return False
+
+
 #-----------------Directory Walk and Scan-----------------#
 def walk_and_scan(root_dir: str):
     root = Path(root_dir)
@@ -90,8 +140,7 @@ def walk_and_scan(root_dir: str):
             path = Path(dirpath) / name
             if not is_scan_target(path):
                 continue
-
-            yield from scan_file(path)
+            scanner(path)
 
 #-----------------CSV Export-----------------#
 def write_csv(rows, out_path: str):
